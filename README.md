@@ -48,15 +48,13 @@ To set up and run the Suika game on your local machine, follow these steps:
 1. If you haven’t already, clone the repository containing the Suika game:
 
     ```bash
-    git clone https://github.com/yourusername/your-repository.git
+    git clone https://github.com/bgar324/suika
     ```
-
-    Replace `yourusername` and `your-repository` with your actual GitHub username and repository name.
 
 2. Navigate to the project directory:
 
     ```bash
-    cd your-repository
+    cd suika
     ```
 
 ### 4. Run the Game
