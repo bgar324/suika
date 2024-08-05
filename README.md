@@ -1,7 +1,7 @@
 # Suika - A Physics-Based Puzzle Game
 
 **Description:**
-Developed a dynamic physics-based puzzle game using Pygame and Pymunk, inspired by the popular game Suika. The game features an interactive and visually appealing environment where players aim to shoot and merge balls of different colors to earn points.
+Developed a dynamic physics-based puzzle game using Pygame and Pymunk, inspired by the popular game Suika.
 
 **Key Features:**
 - **Physics Simulation:** Implemented realistic ball dynamics using Pymunk's physics engine, including collision detection and response.
