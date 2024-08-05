@@ -1,22 +1,29 @@
 import pygame
 import math
 import random
+import pymunk
+import pymunk.pygame_util
 
 pygame.init()
 
-#Screen & Name Logic
+# Screen & Name Logic
 WIDTH, HEIGHT = 500, 720
 screen = pygame.display.set_mode([WIDTH, HEIGHT])
 pygame.display.set_caption('suika')
 
-#Clock
+# Clock
 timer = pygame.time.Clock()
 
-#Game Variables
+# Game Variables
 WALL_THICKNESS = 10 
 WALL_THRESHOLD = 110
 
-#Ball Colors that will be encountered throughout gameplay
+cooldown_time = 500 # Buffer before each shot
+last_shot_time = 0
+
+balls = []
+
+# Ball Colors that will be encountered throughout gameplay
 yellow = (255, 255, 186)
 orange = (255, 223, 186)
 red = (255, 179, 186)
@@ -30,17 +37,16 @@ lavender = (230, 230, 250)
 crimson = (220, 20, 60)
 gold = (255, 215, 0)
 
-#Balls allowed to be dispensed from player
-BALL_COLOR = [yellow,orange,red]
+# Balls allowed to be dispensed from player
+BALL_COLOR = [yellow, orange, red]
 
-#Order of evolution
+# Order of evolution
 COLOR_TRANSITIONS = {
     yellow: orange,
     orange: red,
     red: blue,
     blue: purple,
-    purple: green,
-    green: dark_green,
+    purple: dark_green,
     dark_green: dark_blue,
     dark_blue: pink,
     pink: lavender,
@@ -48,7 +54,7 @@ COLOR_TRANSITIONS = {
     crimson: gold
 }
 
-#Size of each ball
+# Size of each ball
 COLOR_RADIUS = {
     yellow: 10,
     orange: 20,
@@ -64,7 +70,7 @@ COLOR_RADIUS = {
     gold: 180
 }
 
-#Score gain from each ball merge
+# Score gain from each ball merge
 COLOR_SCORES = {
     yellow: 10,
     orange: 20,
@@ -80,21 +86,42 @@ COLOR_SCORES = {
     gold: 120
 }
 
-#Game Variables
-bottom = HEIGHT - WALL_THICKNESS - 15
+# Initialize Pymunk Space
+space = pymunk.Space()
+space.gravity = (0, 400)  # Reduced gravity
+
+# Walls
+static_lines = [
+    pymunk.Segment(space.static_body, (0, 0), (0, HEIGHT), WALL_THICKNESS),  # Left wall
+    pymunk.Segment(space.static_body, (WIDTH, 0), (WIDTH, HEIGHT), WALL_THICKNESS),  # Right wall
+    pymunk.Segment(space.static_body, (0, 0), (WIDTH, 0), WALL_THICKNESS),  # Top wall
+    pymunk.Segment(space.static_body, (0, HEIGHT), (WIDTH, HEIGHT), WALL_THICKNESS)  # Bottom wall
+]
+for line in static_lines:
+    line.elasticity = 0.2  # Reduced elasticity
+    line.friction = 1.0
+    space.add(line)
+
+# Box (container)
 box_left = WALL_THICKNESS + 15
 box_right = WIDTH - WALL_THICKNESS - 15
+box_top = WALL_THICKNESS + 100
+box_bottom = HEIGHT - WALL_THICKNESS - 15
 
-gravity = 0.40
-friction = 0.99999
-bounce_stop = 0.3
+box_lines = [
+    #left wall
+    pymunk.Segment(space.static_body, (box_left, box_top), (box_left, box_bottom + 5), WALL_THICKNESS),
+    #right wall
+    pymunk.Segment(space.static_body, (box_right, box_top), (box_right, box_bottom + 5), WALL_THICKNESS),
+    #bottom floor
+    pymunk.Segment(space.static_body, (box_left, box_bottom), (box_right, box_bottom), WALL_THICKNESS)
+]
+for line in box_lines:
+    line.elasticity = 0.2
+    line.friction = 1.0
+    space.add(line)
 
-cooldown_time = 500 #Buffer before each shot
-last_shot_time = 0
-
-balls = []
-
-#Player Class
+# Player Class
 class Player:
     def __init__(self, x_pos, y_pos, score, image_path):
         self.x_pos = x_pos
@@ -103,163 +130,85 @@ class Player:
         self.image = pygame.image.load(image_path)
         self.rect = self.image.get_rect(topleft=(x_pos, y_pos))
 
-    #Draws the player icon on the screen
     def draw(self, screen):
         screen.blit(self.image, self.rect)
 
-    #Moves the player ONLY in the horizontal
     def move(self, dx):
         self.x_pos += dx
-        # Restrict movement to container area
         self.x_pos = max(WALL_THICKNESS - 10, min(WIDTH - WALL_THICKNESS + 10 - self.rect.width, self.x_pos))
         self.rect.topleft = (self.x_pos, self.y_pos)
 
     def increase_score(self, points):
         self.score += points
 
-#Instantiate the Player object
+# Instantiate the Player object
 player = Player(210, 0, 0, 'images/panda.png')
 
-#Ball Class
+# Ball Class
 class Ball:
-    def __init__(self, x_pos, y_pos, radius, color, retention, y_speed, x_speed):
-        self.x_pos = x_pos
-        self.y_pos = y_pos
-        self.radius = radius
-        self.color = color
-        self.retention = retention
-        self.y_speed = y_speed
-        self.x_speed = x_speed
+    def __init__(self, x_pos, y_pos, radius, color):
+        self.body = pymunk.Body(1, pymunk.moment_for_circle(1, 0, radius))
+        self.body.position = x_pos, y_pos
+        self.shape = pymunk.Circle(self.body, radius)
+        self.shape.color = color
+        self.shape.elasticity = 0.2
+        self.shape.friction = 0.5
+        space.add(self.body, self.shape)
 
-    #Main function that creates the ball
-    def create(self):
-        pygame.draw.circle(screen, self.color, (self.x_pos, self.y_pos-4), self.radius)
+    def draw(self):
+        x, y = self.body.position
+        pygame.draw.circle(screen, self.shape.color, (int(x), int(y)), int(self.shape.radius))
 
-    #Checks and applies gravity if they are above the bottom floor
-    def check_gravity(self):
-        if self.y_pos + self.radius < bottom:
-            self.y_speed += gravity
-        else: #allows the ball to 'bounce' once hitting the ground, very minimally though
-            if abs(self.y_speed) > bounce_stop:
-                self.y_speed = -self.y_speed * self.retention
-            else:
-                #if it is below the threshold, the ball will stop moving.
-                self.y_speed = 0
-        return self.y_speed
-    
-    #Updates the position of the ball, especially when under the effects of gravity, collisions, and friction.
-    def update_pos(self):
-        self.y_pos += self.y_speed
-        self.x_pos += self.x_speed
-        self.x_speed *= friction
-
-    #Checks if in contact with any walls
-    def check_walls(self):
-        #Check collision with the left wall
-        if self.x_pos - self.radius <= box_left:
-            self.x_speed = abs(self.x_speed) * self.retention
-            self.x_pos = box_left + self.radius + 6
-        #Check collision with the right wall
-        elif self.x_pos + self.radius >= box_right:
-            self.x_speed = -abs(self.x_speed) * self.retention
-            self.x_pos = box_right - self.radius - 6
-        
-        #Check collision with the bottom wall
-        if self.y_pos + self.radius >= bottom:
-            self.y_pos = bottom - self.radius
-            if abs(self.y_speed) > bounce_stop:
-                self.y_speed = -abs(self.y_speed) * self.retention
-            else:
-                self.y_speed = 0
-                self.x_speed *= friction
-
-    #Strenuous code that handles collisions
     def handle_collision(self, other):
-        dx = other.x_pos - self.x_pos #Calculates x distance between first and second balls interested with collisions
-        dy = other.y_pos - self.y_pos #Calculates y distance between first and second balls interested with collisions
-        distance = math.hypot(dx, dy) #Calculates the magnitude of the distance between the two
+        dx = other.body.position.x - self.body.position.x
+        dy = other.body.position.y - self.body.position.y
+        distance = math.hypot(dx, dy)
 
-        #If it is found that the distance between the two is within each other, and they are the same color, a merge will occur
-        if distance < self.radius + other.radius:
-            if self.color == other.color and self.color in COLOR_TRANSITIONS:
+        if distance < self.shape.radius + other.shape.radius:
+            if self.shape.color == other.shape.color and self.shape.color in COLOR_TRANSITIONS:
                 new_ball = self.merge_with(other)
-                score_increase = COLOR_SCORES.get(self.color, 0)
+                score_increase = COLOR_SCORES.get(self.shape.color, 0)
                 player.increase_score(score_increase)
                 return new_ball
-            else:
-                #Calculate angle of collision
-                angle = math.atan2(dy, dx)
+        return None
 
-                #Calculate velocities in the direction of the collision angle
-                self_speed = math.sqrt(self.x_speed ** 2 + self.y_speed ** 2)
-                other_speed = math.sqrt(other.x_speed ** 2 + other.y_speed ** 2)
-
-                self_angle = math.atan2(self.y_speed, self.x_speed)
-                other_angle = math.atan2(other.y_speed, other.x_speed)
-
-                self_new_x_speed = self_speed * math.cos(self_angle - angle)
-                self_new_y_speed = self_speed * math.sin(self_angle - angle)
-                other_new_x_speed = other_speed * math.cos(other_angle - angle)
-                other_new_y_speed = other_speed * math.sin(other_angle - angle)
-
-                #Exchange velocities in the direction of the collision
-                self_new_x_speed, other_new_x_speed = other_new_x_speed, self_new_x_speed
-
-                #Convert back to original angle
-                self_final_x_speed = math.cos(angle) * self_new_x_speed + math.cos(angle + math.pi / 2) * self_new_y_speed
-                self_final_y_speed = math.sin(angle) * self_new_x_speed + math.sin(angle + math.pi / 2) * self_new_y_speed
-                other_final_x_speed = math.cos(angle) * other_new_x_speed + math.cos(angle + math.pi / 2) * self_new_y_speed
-                other_final_y_speed = math.sin(angle) * other_new_x_speed + math.sin(angle + math.pi / 2) * self_new_y_speed
-
-                # Update velocities
-                self.x_speed = self_final_x_speed * self.retention
-                self.y_speed = self_final_y_speed * self.retention
-                other.x_speed = other_final_x_speed * other.retention
-                other.y_speed = other_final_y_speed * other.retention
-
-                # Adjust positions to prevent sticking
-                overlap = 0.5 * (self.radius + other.radius - distance + 1)
-                self.x_pos -= overlap * math.cos(angle)
-                self.y_pos -= overlap * math.sin(angle)
-                other.x_pos += overlap * math.cos(angle)
-                other.y_pos += overlap * math.sin(angle)
-
-    #Merges two balls together, combining their positions, radius, and color
     def merge_with(self, other):
-        new_x_pos = (self.x_pos + other.x_pos) / 2
-        new_y_pos = (self.y_pos + other.y_pos) / 2
-        new_color = COLOR_TRANSITIONS[self.color]
+        new_x_pos = (self.body.position.x + other.body.position.x) / 2
+        new_y_pos = (self.body.position.y + other.body.position.y) / 2
+        new_color = COLOR_TRANSITIONS[self.shape.color]
         new_radius = COLOR_RADIUS[new_color]
-        new_retention = (self.retention + other.retention) / 2
-        new_y_speed = (self.y_speed + other.y_speed) / 2
-        new_x_speed = (self.x_speed + other.x_speed) / 2
-
-        new_ball = Ball(new_x_pos, new_y_pos, new_radius, new_color, new_retention, new_y_speed, new_x_speed)
-
+        new_ball = Ball(new_x_pos, new_y_pos, new_radius, new_color)
+    
         return new_ball
 
-#Creates a random ball, that is also a preview ball held underneath the player to show what will be shot next
 def create_random_ball():
     x_pos = player.rect.centerx
     y_pos = player.rect.centery
     color = random.choice(BALL_COLOR)
     radius = COLOR_RADIUS[color]
-    retention = 0.3
-    y_speed = 0
-    x_speed = 0
-    return Ball(x_pos, y_pos, radius, color, retention, y_speed, x_speed)
+    return Ball(x_pos, y_pos, radius, color)
 
 preview_ball = create_random_ball()
 
-#Drawing Functions
-def draw_walls():
-    left = pygame.draw.line(screen, 'white', (0, 0), (0, HEIGHT), WALL_THICKNESS)
-    right = pygame.draw.line(screen, 'white', (WIDTH, 0), (WIDTH, HEIGHT), WALL_THICKNESS)
-    top = pygame.draw.line(screen, 'white', (0, 0), (WIDTH, 0), WALL_THICKNESS)
-    bottom = pygame.draw.line(screen, 'white', (0, HEIGHT), (WIDTH, HEIGHT), WALL_THICKNESS)
-    return [left, right, top, bottom]
+# Drawing Functions
+def draw_lines(lines):
+    for line in lines:
+        body = line.body
+        pv1 = body.position + line.a.rotated(body.angle)
+        pv2 = body.position + line.b.rotated(body.angle)
+        pygame.draw.lines(screen, (139, 69, 19), False, [pv1, pv2], WALL_THICKNESS)
 
-#Function used to simulate a dotted line
+def update_preview_ball_position():
+    preview_ball.body.position = player.rect.centerx, player.rect.centery + 50
+
+def draw_preview_ball():
+    preview_ball.draw()
+
+def draw_score(screen, player):
+    font = pygame.font.SysFont(None, 36)
+    score_text = font.render(f"Score: {player.score}", True, (0, 0, 0))
+    screen.blit(score_text, (10, 10))
+
 def draw_dotted_vertical_line(surface, color, x_pos, start_y, end_y, dot_length, gap_length):
     current_y = start_y
     while current_y < end_y:
@@ -267,52 +216,26 @@ def draw_dotted_vertical_line(surface, color, x_pos, start_y, end_y, dot_length,
         pygame.draw.line(surface, color, (x_pos, current_y), (x_pos, dot_end_y), 5)
         current_y = dot_end_y + gap_length
 
-#Used to show a preview of ball to spewed, sets the to be previwed to be equal to the current ball in hand
-def update_preview_ball_position():
-    preview_ball.x_pos = player.rect.centerx
-    preview_ball.y_pos = player.rect.centery + 50
-
-#Draws the previewed ball, so it can actually be shown
-def draw_preview_ball():
-    preview_x_pos = player.rect.x + player.rect.width - 50
-    preview_y_pos = player.rect.y + (player.rect.height // 2) + 50
-    pygame.draw.circle(screen, preview_ball.color, (preview_x_pos, preview_y_pos), preview_ball.radius)
-
-#Draws the box where the balls will be dropped in to
-def draw_box():
-    left = pygame.draw.line(screen, (139, 69, 19), (box_left, WALL_THICKNESS + 100), (box_left, HEIGHT - WALL_THICKNESS - 10), WALL_THICKNESS)
-    right = pygame.draw.line(screen, (139, 69, 19), (box_right, WALL_THICKNESS + 100), (box_right, HEIGHT - WALL_THICKNESS - 10), WALL_THICKNESS)
-    bottom = pygame.draw.line(screen, (139, 69, 19), (box_left, HEIGHT - WALL_THICKNESS - 15), (box_right, HEIGHT - WALL_THICKNESS - 15), WALL_THICKNESS)
-    return [left, right, bottom]
-
-#Draws the score on the top left of the screen
-def draw_score(screen, player):
-    font = pygame.font.SysFont(None, 36)
-    score_text = font.render(f"Score: {player.score}", True, (0, 0, 0))
-    screen.blit(score_text, (10, 10))  #Position the score at the top-left of the screen
-
-#Game Loop
+# Game Loop
 running = True
 while running:
     screen.fill((242, 196, 171))
-    draw_walls()
-    draw_box()
-    draw_dotted_vertical_line(screen, (0,0,0), player.rect.x + 49, player.rect.y + 100, bottom-10, 5, 20)
+    draw_lines(static_lines)
+    draw_lines(box_lines)
+    draw_dotted_vertical_line(screen, (0, 0, 0), player.rect.x + 49, player.rect.y + 100, box_bottom-10, 5, 20)
 
-    #Get current time
     current_time = pygame.time.get_ticks()
     can_shoot = (current_time - last_shot_time >= cooldown_time)
 
-    #Event loop
+    # Event loop
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_SPACE and can_shoot:
-                new_ball = preview_ball
-                balls.append(new_ball)
+                balls.append(preview_ball)
                 preview_ball = create_random_ball()
-                last_shot_time = current_time  # Update last shot time
+                last_shot_time = current_time
 
     keys = pygame.key.get_pressed()
     if keys[pygame.K_LEFT]:
@@ -320,44 +243,43 @@ while running:
     if keys[pygame.K_RIGHT]:
         player.move(3)
 
-    #Call functions
     update_preview_ball_position()
     player.draw(screen)
     draw_preview_ball()
 
-    #Two seperate arrays, in which the balls that are currently surviving go in the latter array, and the balls that have been removed due to merge have been put in the first
     balls_to_remove = []
     balls_to_add = []
 
-    #Constantly checking and applying to all balls in the game
     for i, ball in enumerate(balls):
-        ball.create() #Creating
-        ball.update_pos() #Updating position
-        ball.check_gravity() #Applying gravity
-        ball.check_walls() #Cheks to see if in contact with walls
+        ball.draw()
 
-        #Check if the ball is above the threshold to end the game
-        if ball.y_pos + ball.radius < WALL_THRESHOLD:
+        if ball.body.position.y + ball.shape.radius < WALL_THRESHOLD:
             print("Game Over!")
-            running = False  #End the game
+            running = False
+            break
 
-        #If a collision has occured, appending will occur
         for j in range(i + 1, len(balls)):
             result = ball.handle_collision(balls[j])
             if result:
-                balls_to_remove.append(ball)
-                balls_to_remove.append(balls[j])
+                if ball not in balls_to_remove:
+                    balls_to_remove.append(ball)
+                if balls[j] not in balls_to_remove:
+                    balls_to_remove.append(balls[j])
                 balls_to_add.append(result)
 
-    #Moreover, adds balls to remove array
+    # Safely remove balls
+    removed_balls = set()
     for ball in balls_to_remove:
-        if ball in balls:
-            balls.remove(ball)
+        if ball not in removed_balls:
+            removed_balls.add(ball)
+            if ball.body in space.bodies:
+                space.remove(ball.body, ball.shape)
+                balls.remove(ball)
     balls.extend(balls_to_add)
 
-    draw_score(screen, player)  #Draw the score
-
+    draw_score(screen, player)
+    space.step(1/60.0)
     pygame.display.flip()
-    timer.tick(60)  #Control frame rate
+    timer.tick(60)
 
 pygame.quit()
