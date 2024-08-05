@@ -4,93 +4,95 @@ import random
 import pymunk
 import pymunk.pygame_util
 
+# Initialize Pygame
 pygame.init()
 
-# Screen & Name Logic
+# Screen dimensions
 WIDTH, HEIGHT = 500, 720
 screen = pygame.display.set_mode([WIDTH, HEIGHT])
-pygame.display.set_caption('suika')
+pygame.display.set_caption('Suika')
 
-# Clock
+# Clock for FPS control
 timer = pygame.time.Clock()
 
 # Game Variables
-WALL_THICKNESS = 10 
+WALL_THICKNESS = 10
 WALL_THRESHOLD = 110
+COOLDOWN_TIME = 500  # Buffer before each shot
 
-cooldown_time = 500 # Buffer before each shot
 last_shot_time = 0
-
 balls = []
 
-# Ball Colors that will be encountered throughout gameplay
-yellow = (255, 255, 186)
-orange = (255, 223, 186)
-red = (255, 179, 186)
-blue = (186, 225, 255)
-green = (186, 255, 201)
-purple = (195, 177, 225)
-dark_green = (184, 216, 190)
-dark_blue = (62, 71, 114)
-pink = (248, 200, 220)
-lavender = (230, 230, 250)
-crimson = (220, 20, 60)
-gold = (255, 215, 0)
+# Ball Colors
+colors = {
+    'yellow': (255, 255, 186),
+    'orange': (255, 223, 186),
+    'red': (255, 179, 186),
+    'blue': (186, 225, 255),
+    'green': (186, 255, 201),
+    'purple': (195, 177, 225),
+    'dark_green': (184, 216, 190),
+    'dark_blue': (62, 71, 114),
+    'pink': (248, 200, 220),
+    'lavender': (230, 230, 250),
+    'crimson': (220, 20, 60),
+    'gold': (255, 215, 0)
+}
 
 # Balls allowed to be dispensed from player
-BALL_COLOR = [yellow, orange, red]
+BALL_COLORS = [colors['yellow'], colors['orange'], colors['red']]
 
 # Order of evolution
 COLOR_TRANSITIONS = {
-    yellow: orange,
-    orange: red,
-    red: blue,
-    blue: purple,
-    purple: dark_green,
-    dark_green: dark_blue,
-    dark_blue: pink,
-    pink: lavender,
-    lavender: crimson,
-    crimson: gold
+    colors['yellow']: colors['orange'],
+    colors['orange']: colors['red'],
+    colors['red']: colors['blue'],
+    colors['blue']: colors['purple'],
+    colors['purple']: colors['dark_green'],
+    colors['dark_green']: colors['dark_blue'],
+    colors['dark_blue']: colors['pink'],
+    colors['pink']: colors['lavender'],
+    colors['lavender']: colors['crimson'],
+    colors['crimson']: colors['gold']
 }
 
 # Size of each ball
 COLOR_RADIUS = {
-    yellow: 10,
-    orange: 20,
-    red: 40,
-    blue: 50,
-    purple: 60,
-    green: 70,
-    dark_green: 80,
-    dark_blue: 100,
-    pink: 120,
-    lavender: 130,
-    crimson: 150,
-    gold: 180
+    colors['yellow']: 10,
+    colors['orange']: 20,
+    colors['red']: 40,
+    colors['blue']: 50,
+    colors['purple']: 60,
+    colors['green']: 70,
+    colors['dark_green']: 80,
+    colors['dark_blue']: 100,
+    colors['pink']: 120,
+    colors['lavender']: 130,
+    colors['crimson']: 150,
+    colors['gold']: 180
 }
 
 # Score gain from each ball merge
 COLOR_SCORES = {
-    yellow: 10,
-    orange: 20,
-    red: 30,
-    blue: 40,
-    purple: 50,
-    green: 60,
-    dark_green: 70,
-    dark_blue: 80,
-    pink: 90,
-    lavender: 100,
-    crimson: 110,
-    gold: 120
+    colors['yellow']: 10,
+    colors['orange']: 20,
+    colors['red']: 30,
+    colors['blue']: 40,
+    colors['purple']: 50,
+    colors['green']: 60,
+    colors['dark_green']: 70,
+    colors['dark_blue']: 80,
+    colors['pink']: 90,
+    colors['lavender']: 100,
+    colors['crimson']: 110,
+    colors['gold']: 120
 }
 
 # Initialize Pymunk Space
 space = pymunk.Space()
 space.gravity = (0, 400)  # Reduced gravity
 
-# Walls
+# Create walls
 static_lines = [
     pymunk.Segment(space.static_body, (0, 0), (0, HEIGHT), WALL_THICKNESS),  # Left wall
     pymunk.Segment(space.static_body, (WIDTH, 0), (WIDTH, HEIGHT), WALL_THICKNESS),  # Right wall
@@ -98,23 +100,20 @@ static_lines = [
     pymunk.Segment(space.static_body, (0, HEIGHT), (WIDTH, HEIGHT), WALL_THICKNESS)  # Bottom wall
 ]
 for line in static_lines:
-    line.elasticity = 0.2  # Reduced elasticity
+    line.elasticity = 0.2
     line.friction = 1.0
     space.add(line)
 
-# Box (container)
+# Create box (container)
 box_left = WALL_THICKNESS + 15
 box_right = WIDTH - WALL_THICKNESS - 15
 box_top = WALL_THICKNESS + 100
 box_bottom = HEIGHT - WALL_THICKNESS - 15
 
 box_lines = [
-    #left wall
-    pymunk.Segment(space.static_body, (box_left, box_top), (box_left, box_bottom + 5), WALL_THICKNESS),
-    #right wall
-    pymunk.Segment(space.static_body, (box_right, box_top), (box_right, box_bottom + 5), WALL_THICKNESS),
-    #bottom floor
-    pymunk.Segment(space.static_body, (box_left, box_bottom), (box_right, box_bottom), WALL_THICKNESS)
+    pymunk.Segment(space.static_body, (box_left, box_top), (box_left, box_bottom + 5), WALL_THICKNESS),  # Left wall
+    pymunk.Segment(space.static_body, (box_right, box_top), (box_right, box_bottom + 5), WALL_THICKNESS),  # Right wall
+    pymunk.Segment(space.static_body, (box_left, box_bottom), (box_right, box_bottom), WALL_THICKNESS)  # Bottom floor
 ]
 for line in box_lines:
     line.elasticity = 0.2
@@ -130,7 +129,7 @@ class Player:
         self.image = pygame.image.load(image_path)
         self.rect = self.image.get_rect(topleft=(x_pos, y_pos))
 
-    def draw(self, screen):
+    def draw(self):
         screen.blit(self.image, self.rect)
 
     def move(self, dx):
@@ -157,7 +156,7 @@ class Ball:
 
     def draw(self):
         x, y = self.body.position
-        pygame.draw.circle(screen, self.shape.color, (int(x), int(y)), int(self.shape.radius))
+        pygame.draw.circle(screen, self.shape.color, (int(x), int(y+4)), int(self.shape.radius))
 
     def handle_collision(self, other):
         dx = other.body.position.x - self.body.position.x
@@ -177,14 +176,12 @@ class Ball:
         new_y_pos = (self.body.position.y + other.body.position.y) / 2
         new_color = COLOR_TRANSITIONS[self.shape.color]
         new_radius = COLOR_RADIUS[new_color]
-        new_ball = Ball(new_x_pos, new_y_pos, new_radius, new_color)
-    
-        return new_ball
+        return Ball(new_x_pos, new_y_pos, new_radius, new_color)
 
 def create_random_ball():
     x_pos = player.rect.centerx
     y_pos = player.rect.centery
-    color = random.choice(BALL_COLOR)
+    color = random.choice(BALL_COLORS)
     radius = COLOR_RADIUS[color]
     return Ball(x_pos, y_pos, radius, color)
 
@@ -204,16 +201,16 @@ def update_preview_ball_position():
 def draw_preview_ball():
     preview_ball.draw()
 
-def draw_score(screen, player):
+def draw_score():
     font = pygame.font.SysFont(None, 36)
     score_text = font.render(f"Score: {player.score}", True, (0, 0, 0))
     screen.blit(score_text, (10, 10))
 
-def draw_dotted_vertical_line(surface, color, x_pos, start_y, end_y, dot_length, gap_length):
+def draw_dotted_vertical_line(color, x_pos, start_y, end_y, dot_length, gap_length):
     current_y = start_y
     while current_y < end_y:
         dot_end_y = min(current_y + dot_length, end_y)
-        pygame.draw.line(surface, color, (x_pos, current_y), (x_pos, dot_end_y), 5)
+        pygame.draw.line(screen, color, (x_pos, current_y), (x_pos, dot_end_y), 5)
         current_y = dot_end_y + gap_length
 
 # Game Loop
@@ -222,10 +219,10 @@ while running:
     screen.fill((242, 196, 171))
     draw_lines(static_lines)
     draw_lines(box_lines)
-    draw_dotted_vertical_line(screen, (0, 0, 0), player.rect.x + 49, player.rect.y + 100, box_bottom-10, 5, 20)
+    draw_dotted_vertical_line((0, 0, 0), player.rect.x + 49, player.rect.y + 100, box_bottom - 10, 5, 20)
 
     current_time = pygame.time.get_ticks()
-    can_shoot = (current_time - last_shot_time >= cooldown_time)
+    can_shoot = (current_time - last_shot_time >= COOLDOWN_TIME)
 
     # Event loop
     for event in pygame.event.get():
@@ -244,7 +241,7 @@ while running:
         player.move(3)
 
     update_preview_ball_position()
-    player.draw(screen)
+    player.draw()
     draw_preview_ball()
 
     balls_to_remove = []
@@ -270,14 +267,15 @@ while running:
     # Safely remove balls
     removed_balls = set()
     for ball in balls_to_remove:
-        if ball not in removed_balls:
+        if ball not in removed_balls
             removed_balls.add(ball)
             if ball.body in space.bodies:
                 space.remove(ball.body, ball.shape)
-                balls.remove(ball)
+            balls.remove(ball)
+
     balls.extend(balls_to_add)
 
-    draw_score(screen, player)
+    draw_score()
     space.step(1/60.0)
     pygame.display.flip()
     timer.tick(60)
