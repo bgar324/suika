@@ -20,10 +20,11 @@
 To set up and run the Suika game on your local machine, follow these steps:
 
 ## Prerequisites
+1. **Git**: Ensure that you have Git properly installed on your system. You can download it from [official Git Website](https://git-scm.com/downloads).
 
-1. **Python**: Ensure you have Python installed on your system. You can download it from the [official Python website](https://www.python.org/downloads/).
+2. **Python**: Ensure you have Python installed on your system. You can download it from the [official Python website](https://www.python.org/downloads/).
 
-2. **Pygame** and **Pymunk**: You will need to install these Python libraries to run the game.
+3. **Pygame** and **Pymunk**: You will need to install these Python libraries to run the game.
 
 ## Installation Steps
 
