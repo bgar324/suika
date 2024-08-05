@@ -28,13 +28,20 @@ To set up and run the Suika game on your local machine, follow these steps:
 
 ## Installation Steps
 
-### 1. Install Python
+### 1. Install Git
+1. Download the Git Installer and proceed with the steps.
+2. Ensure it is in your system by running the following in your command prompt:
+```bash
+git --version
+```
+
+### 2. Install Python
 
 1. Download the Python installer from the [Python Downloads](https://www.python.org/downloads/) page.
 2. Run the installer and follow the installation prompts.
 3. Make sure to check the box that says **Add Python to PATH** during the installation.
 
-### 2. Install Pygame and Pymunk
+### 3. Install Pygame and Pymunk
 
 1. Open a Command Prompt (Windows) or Terminal (macOS/Linux).
 
@@ -44,9 +51,9 @@ To set up and run the Suika game on your local machine, follow these steps:
     pip install pygame pymunk
     ```
 
-### 3. Clone the Repository
+### 4. Clone the Repository
 
-1. If you haven’t already, clone the repository containing the Suika game:
+1. If you haven’t already, clone the repository containing the Suika game, run the following in your editor's terminal:
 
     ```bash
     git clone https://github.com/bgar324/suika
@@ -58,7 +65,7 @@ To set up and run the Suika game on your local machine, follow these steps:
     cd suika
     ```
 
-### 4. Run the Game
+### 5. Run the Game
 
 1. Ensure you are in the project directory.
 2. Run the game script:
